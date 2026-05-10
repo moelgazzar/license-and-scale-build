@@ -3,52 +3,53 @@ import Link from 'next/link';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Greenscape Pro | Closed-Lost Reactivation',
+  title: 'Greenscape Pro | Closed-Lost Reactivation Control Center',
   description:
-    'Closed-Lost Reactivation Control Center for Greenscape Pro - Marcus-voice re-engagement of cold leads with AI-drafted SMS, email, and call openers.',
+    'Internal sales console that turns stale GHL leads into reviewed, personalized follow-up opportunities. Built for Greenscape Pro.',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full bg-stone-50 text-stone-900">
-        <header className="border-b border-stone-200 bg-white">
-          <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-            <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
-              <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
-              <span>Greenscape Pro</span>
-              <span className="text-stone-400">/</span>
-              <span className="text-stone-600 font-normal">Reactivation Control</span>
+      <body className="min-h-full">
+        <header className="sticky top-0 z-10 border-b border-[var(--color-hairline-soft)] bg-[var(--color-canvas)]/95 backdrop-blur">
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5">
+            <Link href="/" className="flex items-center gap-2.5">
+              <span aria-hidden className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-rausch text-white text-xs font-bold">G</span>
+              <span className="text-[15px] font-semibold tracking-tight text-[var(--color-ink)]">Greenscape Pro</span>
+              <span className="text-[var(--color-muted-soft)]">·</span>
+              <span className="text-[14px] text-[var(--color-muted)]">Reactivation Control</span>
             </Link>
-            <nav className="flex items-center gap-1 text-sm">
+            <nav className="flex items-center gap-1 text-[14px]">
               <NavLink href="/">Leads</NavLink>
-              <NavLink href="/queue">Queue</NavLink>
+              <NavLink href="/queue">Approval queue</NavLink>
               <NavLink href="/outbox">Outbox</NavLink>
               <NavLink href="/replies">Replies</NavLink>
-              <NavLink href="/replies/simulate" emphasis>
-                Simulate Reply
-              </NavLink>
+              <Link
+                href="/replies/simulate"
+                className="ml-2 rounded-full border border-[var(--color-hairline)] bg-[var(--color-canvas)] px-3.5 py-1.5 text-[13px] font-medium text-[var(--color-ink)] hover:bg-[var(--color-surface-soft)]"
+              >
+                Simulate reply
+              </Link>
             </nav>
           </div>
         </header>
         <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
-        <footer className="mx-auto max-w-6xl px-6 pb-12 pt-4 text-xs text-stone-500">
-          Internal tool. Customer-facing send is queued to Supabase outbox; production GHL/Twilio dispatch is a documented hookup.
+        <footer className="mx-auto max-w-6xl px-6 pb-12 pt-6">
+          <p className="border-t border-[var(--color-hairline-soft)] pt-6 text-[12px] text-[var(--color-muted)]">
+            Internal tool. Customer-facing send is queued to Supabase outbox; production GHL/Twilio dispatch is documented behind the <code className="rounded bg-[var(--color-surface-strong)] px-1 text-[11px]">GHL_SEND_ENABLED</code> flag.
+          </p>
         </footer>
       </body>
     </html>
   );
 }
 
-function NavLink({ href, children, emphasis = false }: { href: string; children: React.ReactNode; emphasis?: boolean }) {
+function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
     <Link
       href={href}
-      className={
-        emphasis
-          ? 'rounded-md bg-stone-900 px-3 py-1.5 text-white hover:bg-stone-700'
-          : 'rounded-md px-3 py-1.5 text-stone-700 hover:bg-stone-100'
-      }
+      className="rounded-md px-3 py-1.5 text-[var(--color-ink)] hover:bg-[var(--color-surface-soft)] font-medium"
     >
       {children}
     </Link>
