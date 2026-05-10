@@ -298,10 +298,10 @@ function LeadsSection({
         </div>
       ) : (
         <form action={generateDraftsForm}>
-          {/* Top submit bar - mirrors the bottom one so the CTA is always visible */}
+          {/* Single submit bar at the top of the table - the only Generate button on this section */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-hairline-soft)] bg-[var(--color-surface-soft)] px-6 py-3">
             <p className="text-[12.5px] text-[var(--color-muted)]">
-              Tick the boxes below for the leads you want drafts for, then click Generate selected.
+              Tick the boxes below, then click Generate. Eligibility: less than 3 attempts and not opted out. Telegram fires only after approval, never on generation.
             </p>
             <button type="submit" className="btn-primary text-[13.5px] px-4 py-2">
               Generate selected drafts
@@ -380,14 +380,6 @@ function LeadsSection({
               </tbody>
             </table>
           </div>
-          <footer className="flex flex-wrap items-center justify-between gap-4 border-t border-[var(--color-hairline-soft)] bg-[var(--color-surface-soft)] px-6 py-4">
-            <p className="text-[12.5px] text-[var(--color-muted)]">
-              Eligibility: less than 3 attempts and not opted out. Generation creates drafts only — no customer messages are sent.
-            </p>
-            <button type="submit" className="btn-primary">
-              Generate selected drafts
-            </button>
-          </footer>
         </form>
       )}
     </section>
