@@ -34,29 +34,29 @@ export default async function SimulateReplyPage() {
   const leads = (rows ?? []) as Array<Pick<ClosedLostLead, 'id' | 'first_name' | 'last_name' | 'project_type' | 'status' | 'city'>>;
 
   return (
-    <div className="space-y-6">
-      <header className="flex items-end justify-between">
+    <div className="space-y-8">
+      <header className="space-y-2">
+        <p className="section-eyebrow">Simulate</p>
+        <h1 className="text-[26px] font-semibold tracking-tight text-[var(--color-ink)]">Paste a customer reply.</h1>
+        <p className="max-w-2xl text-[14px] leading-relaxed text-[var(--color-body-text)]">
+          In production, a GHL or Twilio webhook delivers replies into this flow automatically. For the demo, paste any
+          reply text below and the OpenAI classifier will tag it hot / warm / not interested / manual review and update
+          the lead. Hot replies immediately ping Telegram.
+        </p>
         <div>
-          <p className="text-sm uppercase tracking-wider text-stone-500">Simulate</p>
-          <h1 className="text-3xl font-semibold tracking-tight">Paste a customer reply</h1>
-          <p className="mt-2 max-w-2xl text-stone-600">
-            In production a GHL or Twilio webhook delivers replies here. For the demo, paste any reply text - the OpenAI
-            classifier will tag it hot / warm / not interested / manual review and update the lead. Hot replies
-            immediately ping Telegram.
-          </p>
+          <Link href="/replies" className="text-[13px] font-medium text-rausch hover:underline">
+            ← Replies feed
+          </Link>
         </div>
-        <Link href="/replies" className="text-sm text-stone-700 hover:underline">
-          ← Replies feed
-        </Link>
       </header>
 
-      <form action={classifySimulatedReply} className="space-y-4 rounded-xl border border-stone-200 bg-white p-5">
+      <form action={classifySimulatedReply} className="card space-y-5 p-6">
         <label className="block">
-          <span className="text-xs font-semibold uppercase tracking-wider text-stone-500">Lead</span>
+          <span className="section-eyebrow">Lead</span>
           <select
             name="leadId"
             required
-            className="mt-1 block w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-stone-400 focus:outline-none"
+            className="mt-1 block w-full rounded-[10px] border border-[var(--color-hairline)] bg-[var(--color-canvas)] px-3 py-2 text-[14px] text-[var(--color-ink)] focus:border-[var(--color-ink)] focus:outline-none"
           >
             <option value="">Select a lead…</option>
             {leads.map((l) => (
@@ -67,11 +67,11 @@ export default async function SimulateReplyPage() {
           </select>
         </label>
         <label className="block">
-          <span className="text-xs font-semibold uppercase tracking-wider text-stone-500">Channel</span>
+          <span className="section-eyebrow">Channel</span>
           <select
             name="channel"
             defaultValue="sms"
-            className="mt-1 block w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-stone-400 focus:outline-none"
+            className="mt-1 block w-full rounded-[10px] border border-[var(--color-hairline)] bg-[var(--color-canvas)] px-3 py-2 text-[14px] text-[var(--color-ink)] focus:border-[var(--color-ink)] focus:outline-none"
           >
             <option value="sms">SMS</option>
             <option value="email">Email</option>
@@ -79,33 +79,32 @@ export default async function SimulateReplyPage() {
           </select>
         </label>
         <label className="block">
-          <span className="text-xs font-semibold uppercase tracking-wider text-stone-500">Reply text</span>
+          <span className="section-eyebrow">Reply text</span>
           <textarea
             name="text"
             required
             minLength={5}
             rows={5}
             placeholder="Paste the customer reply..."
-            className="mt-1 block w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-stone-400 focus:outline-none"
+            className="mt-1 block w-full rounded-[10px] border border-[var(--color-hairline)] bg-[var(--color-canvas)] px-3 py-2 text-[14px] text-[var(--color-ink)] focus:border-[var(--color-ink)] focus:outline-none"
           />
         </label>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-3">
-          <details>
-            <summary className="cursor-pointer text-xs text-stone-600 hover:text-stone-900">Sample replies (click to expand)</summary>
-            <ul className="mt-2 space-y-1.5 text-xs text-stone-600">
-              {SAMPLE_REPLIES.map((s) => (
-                <li key={s.label}>
-                  <span className="font-semibold">{s.label}:</span> {s.text}
-                </li>
-              ))}
-            </ul>
-          </details>
-          <button
-            type="submit"
-            className="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700"
-          >
-            Classify reply
-          </button>
+
+        <details className="rounded-[10px] bg-[var(--color-surface-soft)] p-4 open:bg-[var(--color-surface-soft)]">
+          <summary className="cursor-pointer text-[13px] font-medium text-[var(--color-ink)] hover:text-[var(--color-rausch)]">
+            Sample replies (click any line to copy)
+          </summary>
+          <ul className="mt-3 space-y-2 text-[13px] text-[var(--color-body-text)]">
+            {SAMPLE_REPLIES.map((s) => (
+              <li key={s.label}>
+                <span className="font-semibold text-[var(--color-ink)]">{s.label}:</span> {s.text}
+              </li>
+            ))}
+          </ul>
+        </details>
+
+        <div className="flex justify-end">
+          <button type="submit" className="btn-primary">Classify reply</button>
         </div>
       </form>
     </div>

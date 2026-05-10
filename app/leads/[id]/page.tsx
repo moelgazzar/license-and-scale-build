@@ -36,181 +36,168 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
   return (
     <div className="space-y-8">
-      <Link href="/" className="text-sm text-stone-700 hover:underline">
+      <Link href="/" className="text-[13px] font-medium text-rausch hover:underline">
         ← All leads
       </Link>
-      <header className="space-y-2">
-        <p className="text-sm uppercase tracking-wider text-stone-500">Lead</p>
-        <h1 className="text-3xl font-semibold tracking-tight">
+      <header className="space-y-3">
+        <p className="section-eyebrow">Lead detail</p>
+        <h1 className="text-[28px] font-semibold tracking-tight text-[var(--color-ink)]">
           {lead.first_name} {lead.last_name ?? ''}
         </h1>
-        <p className="text-stone-600">
+        <p className="text-[14px] text-[var(--color-body-text)]">
           {lead.project_type ?? '-'} · {lead.city ?? '-'} {lead.zip ? `(${lead.zip})` : ''} · est. ${' '}
           {lead.est_project_value ? Math.round(Number(lead.est_project_value)).toLocaleString() : '-'}
         </p>
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className={`status-badge status-${lead.status}`}>{lead.status.replace(/_/g, ' ')}</span>
-          <span className="text-stone-500">attempt {lead.attempt_count}/3</span>
+        <div className="flex flex-wrap items-center gap-2 text-[12px]">
+          <span className={`badge status-${lead.status}`}>{lead.status.replace(/_/g, ' ')}</span>
+          <span className="text-[var(--color-muted)]">attempt {lead.attempt_count}/3</span>
           {lead.last_touchpoint_at && (
-            <span className="text-stone-500">
-              last touchpoint {new Date(lead.last_touchpoint_at).toLocaleDateString()}
+            <span className="text-[var(--color-muted)]">
+              · last touchpoint {new Date(lead.last_touchpoint_at).toLocaleDateString()}
             </span>
           )}
-          {lead.reason_lost && <span className="text-stone-500">· reason: {lead.reason_lost}</span>}
+          {lead.reason_lost && <span className="text-[var(--color-muted)]">· reason: {lead.reason_lost}</span>}
         </div>
       </header>
 
-      <section className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-xl border border-stone-200 bg-white p-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">Last touchpoint summary</p>
-          <p className="mt-1 text-sm text-stone-800">{lead.last_touchpoint_summary ?? '-'}</p>
+      <section className="grid gap-3 md:grid-cols-2">
+        <div className="card p-5">
+          <p className="section-eyebrow">Last touchpoint summary</p>
+          <p className="mt-1.5 text-[13.5px] leading-relaxed text-[var(--color-ink)]">{lead.last_touchpoint_summary ?? '-'}</p>
         </div>
-        <div className="rounded-xl border border-stone-200 bg-white p-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">Internal notes</p>
-          <p className="mt-1 text-sm text-stone-800">{lead.notes ?? '-'}</p>
+        <div className="card p-5">
+          <p className="section-eyebrow">Internal notes</p>
+          <p className="mt-1.5 text-[13.5px] leading-relaxed text-[var(--color-ink)]">{lead.notes ?? '-'}</p>
         </div>
       </section>
 
-      <section>
-        <h2 className="text-lg font-semibold">Drafts ({drafts.length})</h2>
-        <div className="mt-3 space-y-3">
-          {drafts.length === 0 && <EmptyCard label="No drafts yet." />}
-          {drafts.map((d) => (
-            <article key={d.id} className="rounded-xl border border-stone-200 bg-white p-5">
-              <header className="flex items-center justify-between text-xs text-stone-500">
-                <span>
-                  {new Date(d.created_at).toLocaleString()} · model {d.model}
-                  {d.generation_cost_usd !== null && ` · $${Number(d.generation_cost_usd).toFixed(4)}`}
-                </span>
+      <Section title={`Drafts (${drafts.length})`}>
+        {drafts.length === 0 && <EmptyCard label="No drafts yet for this lead." />}
+        {drafts.map((d) => (
+          <article key={d.id} className="card p-5">
+            <header className="flex items-center justify-between text-[12px] text-[var(--color-muted)]">
+              <span>
+                {new Date(d.created_at).toLocaleString()} · {d.model}
+                {d.generation_cost_usd !== null && ` · $${Number(d.generation_cost_usd).toFixed(4)}`}
+              </span>
+              <span
+                className={`badge ${
+                  d.status === 'pending'
+                    ? 'status-approved'
+                    : d.status === 'approved'
+                    ? 'status-replied'
+                    : 'status-not_interested'
+                }`}
+              >
+                {d.status}
+              </span>
+            </header>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <Field label="SMS draft" value={d.sms_draft ?? '-'} />
+              <Field label="Call opener" value={d.call_opener ?? '-'} />
+              <Field label="Email subject" value={d.email_subject ?? '-'} />
+              <Field label="Rationale" value={d.rationale ?? '-'} />
+              <div className="md:col-span-2">
+                <Field label="Email body" value={d.email_body ?? '-'} />
+              </div>
+            </div>
+            {d.status === 'pending' && (
+              <div className="mt-4 flex justify-end gap-2">
+                <form action={rejectDraftForm}>
+                  <input type="hidden" name="draftId" value={d.id} />
+                  <button type="submit" className="btn-ghost">Reject</button>
+                </form>
+                <form action={approveDraftForm}>
+                  <input type="hidden" name="draftId" value={d.id} />
+                  <button type="submit" className="btn-primary">Approve & queue</button>
+                </form>
+              </div>
+            )}
+          </article>
+        ))}
+      </Section>
+
+      <Section title={`Outbox (${outbox.length})`}>
+        {outbox.length === 0 && <EmptyCard label="Nothing approved to outbox yet." />}
+        {outbox.map((m) => (
+          <article key={m.id} className="card p-5">
+            <header className="flex items-center justify-between text-[13px]">
+              <span className="font-semibold text-[var(--color-ink)]">
+                {m.channel.toUpperCase()} · to {m.to_address}
+              </span>
+              <div className="flex items-center gap-2">
                 <span
-                  className={`status-badge ${
-                    d.status === 'pending'
-                      ? 'bg-amber-100 text-amber-800'
-                      : d.status === 'approved'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-stone-200 text-stone-600'
+                  className={`badge ${
+                    m.status === 'queued'
+                      ? 'status-approved'
+                      : m.status === 'sent_simulated'
+                      ? 'status-sent'
+                      : 'status-do_not_contact'
                   }`}
                 >
-                  {d.status}
+                  {m.status.replace('_', ' ')}
                 </span>
-              </header>
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <Field label="SMS draft" value={d.sms_draft ?? '-'} />
-                <Field label="Call opener" value={d.call_opener ?? '-'} />
-                <Field label="Email subject" value={d.email_subject ?? '-'} />
-                <Field label="Rationale" value={d.rationale ?? '-'} />
-                <div className="md:col-span-2">
-                  <Field label="Email body" value={d.email_body ?? '-'} />
-                </div>
+                {m.status === 'queued' && (
+                  <form action={dispatchOutboxForm}>
+                    <input type="hidden" name="messageId" value={m.id} />
+                    <button type="submit" className="btn-secondary text-[12px] px-3 py-1.5">
+                      Simulate dispatch
+                    </button>
+                  </form>
+                )}
               </div>
-              {d.status === 'pending' && (
-                <div className="mt-4 flex justify-end gap-2">
-                  <form action={rejectDraftForm}>
-                    <input type="hidden" name="draftId" value={d.id} />
-                    <button
-                      type="submit"
-                      className="rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
-                    >
-                      Reject
-                    </button>
-                  </form>
-                  <form action={approveDraftForm}>
-                    <input type="hidden" name="draftId" value={d.id} />
-                    <button
-                      type="submit"
-                      className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-800"
-                    >
-                      Approve & queue
-                    </button>
-                  </form>
-                </div>
-              )}
-            </article>
-          ))}
-        </div>
-      </section>
+            </header>
+            {m.subject && <p className="mt-2 text-[13.5px] font-medium text-[var(--color-ink)]">{m.subject}</p>}
+            <p className="mt-2 whitespace-pre-line text-[13.5px] leading-relaxed text-[var(--color-body-text)]">{m.body}</p>
+          </article>
+        ))}
+      </Section>
 
-      <section>
-        <h2 className="text-lg font-semibold">Outbox ({outbox.length})</h2>
-        <div className="mt-3 space-y-3">
-          {outbox.length === 0 && <EmptyCard label="Nothing approved to outbox yet." />}
-          {outbox.map((m) => (
-            <article key={m.id} className="rounded-xl border border-stone-200 bg-white p-5">
-              <header className="flex items-center justify-between text-sm">
-                <span className="font-medium">
-                  {m.channel.toUpperCase()} · to {m.to_address}
-                </span>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`status-badge ${
-                      m.status === 'queued'
-                        ? 'bg-amber-100 text-amber-800'
-                        : m.status === 'sent_simulated'
-                        ? 'bg-violet-100 text-violet-800'
-                        : 'bg-rose-100 text-rose-800'
-                    }`}
-                  >
-                    {m.status.replace('_', ' ')}
-                  </span>
-                  {m.status === 'queued' && (
-                    <form action={dispatchOutboxForm}>
-                      <input type="hidden" name="messageId" value={m.id} />
-                      <button
-                        type="submit"
-                        className="rounded-md bg-stone-900 px-3 py-1 text-xs text-white hover:bg-stone-700"
-                      >
-                        Simulate dispatch
-                      </button>
-                    </form>
-                  )}
-                </div>
-              </header>
-              {m.subject && <p className="mt-2 text-sm font-medium text-stone-700">{m.subject}</p>}
-              <p className="mt-2 whitespace-pre-line text-sm text-stone-700">{m.body}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <h2 className="text-lg font-semibold">Replies ({replies.length})</h2>
-        <div className="mt-3 space-y-3">
-          {replies.length === 0 && <EmptyCard label="No replies yet." />}
-          {replies.map((r) => (
-            <article key={r.id} className="rounded-xl border border-stone-200 bg-white p-5">
-              <header className="flex items-center justify-between text-sm">
-                <span className="font-medium">{r.channel.toUpperCase()} reply</span>
-                <span className={`status-badge classification-${r.classification}`}>
-                  {r.classification.replace('_', ' ')}
-                </span>
-              </header>
-              <blockquote className="mt-2 border-l-2 border-stone-300 pl-3 text-sm italic text-stone-700">
-                {r.raw_text}
-              </blockquote>
-              <p className="mt-2 text-sm text-stone-600">
-                <span className="font-medium">AI rationale:</span> {r.classification_reason}
-              </p>
-              <p className="mt-1 text-xs text-stone-500">
-                {new Date(r.created_at).toLocaleString()} · model {r.model}
-                {r.notified_via_telegram && ' · 📲 Telegram'}
-              </p>
-            </article>
-          ))}
-        </div>
-      </section>
+      <Section title={`Replies (${replies.length})`}>
+        {replies.length === 0 && <EmptyCard label="No replies yet." />}
+        {replies.map((r) => (
+          <article key={r.id} className="card p-5">
+            <header className="flex items-center justify-between text-[13px]">
+              <span className="font-semibold text-[var(--color-ink)]">{r.channel.toUpperCase()} reply</span>
+              <span className={`badge classification-${r.classification}`}>
+                {r.classification.replace('_', ' ')}
+              </span>
+            </header>
+            <blockquote className="mt-2 border-l-2 border-[var(--color-rausch)] pl-3 text-[13.5px] italic text-[var(--color-ink)]">
+              {r.raw_text}
+            </blockquote>
+            <p className="mt-2 text-[13px] text-[var(--color-body-text)]">
+              <span className="font-semibold">AI rationale:</span> {r.classification_reason}
+            </p>
+            <p className="mt-1.5 text-[11.5px] text-[var(--color-muted)]">
+              {new Date(r.created_at).toLocaleString()} · {r.model}
+              {r.notified_via_telegram && ' · 📲 Telegram'}
+            </p>
+          </article>
+        ))}
+      </Section>
     </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <h2 className="text-[16px] font-semibold tracking-tight text-[var(--color-ink)]">{title}</h2>
+      <div className="space-y-3">{children}</div>
+    </section>
   );
 }
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">{label}</p>
-      <p className="mt-1 whitespace-pre-line text-sm text-stone-800">{value}</p>
+      <p className="section-eyebrow">{label}</p>
+      <p className="mt-1.5 whitespace-pre-line text-[13.5px] leading-relaxed text-[var(--color-ink)]">{value}</p>
     </div>
   );
 }
 
 function EmptyCard({ label }: { label: string }) {
-  return <div className="rounded-lg border border-dashed border-stone-200 bg-white px-5 py-6 text-sm text-stone-500">{label}</div>;
+  return <div className="rounded-[14px] border border-dashed border-[var(--color-hairline)] bg-[var(--color-canvas)] px-5 py-6 text-[13px] text-[var(--color-muted)]">{label}</div>;
 }

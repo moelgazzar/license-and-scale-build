@@ -25,91 +25,83 @@ export default async function OutboxPage({
   const { data, error } = await q;
   if (error) {
     return (
-      <div className="rounded-lg border border-rose-200 bg-rose-50 p-6 text-rose-800">
+      <div className="rounded-[14px] border border-rose-200 bg-rose-50 p-6 text-rose-800">
         Failed to load outbox: {error.message}
       </div>
     );
   }
   const rows = (data ?? []) as OutboxRow[];
+  const queuedCount = rows.filter((r) => r.status === 'queued').length;
 
   return (
-    <div className="space-y-6">
-      <header className="flex items-end justify-between">
+    <div className="space-y-8">
+      <header className="space-y-2">
+        <p className="section-eyebrow">Outbox</p>
+        <h1 className="text-[26px] font-semibold tracking-tight text-[var(--color-ink)]">
+          Approved messages waiting to dispatch.
+        </h1>
+        <p className="max-w-2xl text-[14px] leading-relaxed text-[var(--color-body-text)]">
+          Approved drafts land here. In production, GHL or Twilio dispatch is wired behind the{' '}
+          <code className="rounded bg-[var(--color-surface-strong)] px-1 text-[12px]">GHL_SEND_ENABLED</code> flag. The simulated
+          dispatch button below toggles state without sending to a real customer.
+        </p>
+        {queuedCount > 0 && (
+          <p className="text-[13px] text-[var(--color-muted)]">{queuedCount} message{queuedCount === 1 ? '' : 's'} ready to dispatch.</p>
+        )}
         <div>
-          <p className="text-sm uppercase tracking-wider text-stone-500">Outbox</p>
-          <h1 className="text-3xl font-semibold tracking-tight">Approved messages</h1>
-          <p className="mt-2 max-w-2xl text-stone-600">
-            Messages flow here on approval. Production wires this to GHL or Twilio dispatch behind the{' '}
-            <code>GHL_SEND_ENABLED</code> flag. The simulated dispatch button toggles state without sending to a real
-            customer.
-          </p>
+          <Link href="/queue" className="text-[13px] font-medium text-rausch hover:underline">
+            ← Approval queue
+          </Link>
         </div>
-        <Link href="/queue" className="text-sm text-stone-700 hover:underline">
-          ← Approval queue
-        </Link>
       </header>
-      <nav className="flex gap-1 text-sm">
+      <nav className="flex flex-wrap gap-1.5">
         {(['all', 'queued', 'sent_simulated', 'failed'] as const).map((k) => (
           <Link
             key={k}
             href={k === 'all' ? '/outbox' : `/outbox?status=${k}`}
-            className={
-              status === k
-                ? 'rounded-md bg-stone-900 px-3 py-1 text-white'
-                : 'rounded-md px-3 py-1 text-stone-700 hover:bg-stone-100'
-            }
+            className={`filter-pill ${status === k ? 'filter-pill-active' : ''}`}
           >
             {k.replace(/_/g, ' ')}
           </Link>
         ))}
       </nav>
+      {rows.length === 0 && (
+        <div className="empty-state">
+          <h3>Outbox is empty</h3>
+          <p>
+            Approve a draft from the <Link href="/queue" className="text-rausch hover:underline">queue</Link> to populate this list.
+          </p>
+        </div>
+      )}
       <div className="space-y-3">
-        {rows.length === 0 && (
-          <div className="rounded-lg border border-stone-200 bg-white p-10 text-center text-stone-600">
-            No outbox messages yet. Approve a draft from the queue to populate this list.
-          </div>
-        )}
         {rows.map((msg) => (
-          <article key={msg.id} className="rounded-xl border border-stone-200 bg-white px-5 py-4">
+          <article key={msg.id} className="card px-6 py-4">
             <header className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="text-base font-semibold">
+                <h2 className="text-[15px] font-semibold text-[var(--color-ink)]">
                   <Link href={`/leads/${msg.lead.id}`} className="hover:underline">
                     {msg.lead.first_name} {msg.lead.last_name ?? ''}
                   </Link>
-                  <span className="ml-2 text-sm font-normal text-stone-500">
+                  <span className="ml-2 text-[13px] font-normal text-[var(--color-muted)]">
                     {msg.channel.toUpperCase()} · to {msg.to_address}
                   </span>
                 </h2>
-                {msg.subject && <p className="mt-1 text-sm font-medium text-stone-700">{msg.subject}</p>}
+                {msg.subject && <p className="mt-1 text-[13.5px] font-medium text-[var(--color-ink)]">{msg.subject}</p>}
               </div>
               <div className="flex items-center gap-2">
-                <span
-                  className={`status-badge ${
-                    msg.status === 'queued'
-                      ? 'bg-amber-100 text-amber-800'
-                      : msg.status === 'sent_simulated'
-                      ? 'bg-violet-100 text-violet-800'
-                      : 'bg-rose-100 text-rose-800'
-                  }`}
-                >
-                  {msg.status.replace('_', ' ')}
-                </span>
+                <OutboxBadge status={msg.status} />
                 {msg.status === 'queued' && (
                   <form action={dispatchOutboxForm}>
                     <input type="hidden" name="messageId" value={msg.id} />
-                    <button
-                      type="submit"
-                      className="rounded-md bg-stone-900 px-3 py-1 text-xs font-medium text-white hover:bg-stone-700"
-                    >
+                    <button type="submit" className="btn-secondary text-[12.5px] px-3 py-1.5">
                       Simulate dispatch
                     </button>
                   </form>
                 )}
               </div>
             </header>
-            <p className="mt-3 whitespace-pre-line text-sm text-stone-700">{msg.body}</p>
-            <p className="mt-3 text-xs text-stone-500">
+            <p className="mt-3 whitespace-pre-line text-[13.5px] leading-relaxed text-[var(--color-body-text)]">{msg.body}</p>
+            <p className="mt-3 text-[11.5px] text-[var(--color-muted)]">
               created {new Date(msg.created_at).toLocaleString()}
               {msg.dispatched_at ? ` · dispatched ${new Date(msg.dispatched_at).toLocaleString()}` : ''}
             </p>
@@ -118,4 +110,13 @@ export default async function OutboxPage({
       </div>
     </div>
   );
+}
+
+function OutboxBadge({ status }: { status: OutboxStatus }) {
+  const map: Record<OutboxStatus, string> = {
+    queued: 'badge status-approved',
+    sent_simulated: 'badge status-sent',
+    failed: 'badge status-do_not_contact',
+  };
+  return <span className={map[status]}>{status.replace('_', ' ')}</span>;
 }

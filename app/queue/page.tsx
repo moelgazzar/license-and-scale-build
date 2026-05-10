@@ -19,7 +19,7 @@ export default async function QueuePage() {
 
   if (error) {
     return (
-      <div className="rounded-lg border border-rose-200 bg-rose-50 p-6 text-rose-800">
+      <div className="rounded-[14px] border border-rose-200 bg-rose-50 p-6 text-rose-800">
         Failed to load queue: {error.message}
       </div>
     );
@@ -28,24 +28,31 @@ export default async function QueuePage() {
   const drafts = (data ?? []) as DraftWithLead[];
 
   return (
-    <div className="space-y-6">
-      <header className="flex items-end justify-between">
+    <div className="space-y-8">
+      <header className="space-y-2">
+        <p className="section-eyebrow">Step 2 · Approval queue</p>
+        <h1 className="text-[26px] font-semibold tracking-tight text-[var(--color-ink)]">
+          Review drafts before anything is sent.
+        </h1>
+        <p className="max-w-2xl text-[14px] leading-relaxed text-[var(--color-body-text)]">
+          {drafts.length === 0
+            ? 'Nothing in the queue right now. Generate drafts from the leads dashboard to populate this view.'
+            : `${drafts.length} draft${drafts.length === 1 ? '' : 's'} waiting for approval. Approving queues SMS + email to the outbox and pings Telegram.`}
+        </p>
         <div>
-          <p className="text-sm uppercase tracking-wider text-stone-500">Approval queue</p>
-          <h1 className="text-3xl font-semibold tracking-tight">Pending review</h1>
-          <p className="mt-2 text-stone-600">
-            {drafts.length} draft{drafts.length === 1 ? '' : 's'} waiting for approval. Approving queues SMS + email to
-            the outbox and pings Telegram.
-          </p>
+          <Link href="/" className="text-[13px] font-medium text-rausch hover:underline">
+            ← Back to leads
+          </Link>
         </div>
-        <Link href="/" className="text-sm text-stone-700 hover:underline">
-          ← Back to leads
-        </Link>
       </header>
 
       {drafts.length === 0 && (
-        <div className="rounded-lg border border-stone-200 bg-white p-10 text-center text-stone-600">
-          No pending drafts. Generate some from the leads dashboard.
+        <div className="empty-state">
+          <h3>Approval queue is clear</h3>
+          <p>
+            Head to the <Link href="/" className="text-rausch hover:underline">leads dashboard</Link>, select a few high-value cold
+            leads, and click Generate reactivation drafts.
+          </p>
         </div>
       )}
 
@@ -61,43 +68,45 @@ export default async function QueuePage() {
 function DraftCard({ draft }: { draft: DraftWithLead }) {
   const lead = draft.lead;
   return (
-    <article className="rounded-xl border border-stone-200 bg-white">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-stone-100 px-5 py-4">
+    <article className="card overflow-hidden">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--color-hairline-soft)] px-6 py-4">
         <div>
-          <h2 className="text-lg font-semibold">
+          <h2 className="text-[16px] font-semibold text-[var(--color-ink)]">
             <Link href={`/leads/${lead.id}`} className="hover:underline">
               {lead.first_name} {lead.last_name ?? ''}
             </Link>
-            <span className="ml-2 text-sm font-normal text-stone-500">
+            <span className="ml-2 text-[13px] font-normal text-[var(--color-muted)]">
               {lead.project_type} · {lead.city}
             </span>
           </h2>
-          <p className="mt-1 text-sm text-stone-600">
-            Est. ${lead.est_project_value ? Math.round(Number(lead.est_project_value)).toLocaleString() : '-'} · attempt{' '}
-            {lead.attempt_count + 1}/3
+          <p className="mt-0.5 text-[12.5px] text-[var(--color-muted)]">
+            Est. ${lead.est_project_value ? Math.round(Number(lead.est_project_value)).toLocaleString() : '-'} ·
+            attempt {lead.attempt_count + 1}/3
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-stone-500">
-          <span>model: {draft.model}</span>
-          {draft.generation_cost_usd !== null && (
-            <span>· cost: ${Number(draft.generation_cost_usd).toFixed(4)}</span>
-          )}
+        <div className="text-[11.5px] text-[var(--color-muted)]">
+          {draft.model}
+          {draft.generation_cost_usd !== null && ` · $${Number(draft.generation_cost_usd).toFixed(4)}`}
         </div>
       </header>
 
-      <div className="grid gap-5 px-5 py-5 md:grid-cols-2">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">Rationale</p>
-          <p className="mt-1 text-sm text-stone-800">{draft.rationale}</p>
-          <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-stone-500">Lead context</p>
-          <p className="mt-1 text-sm text-stone-700 whitespace-pre-line">
-            {lead.last_touchpoint_summary}
-          </p>
+      <div className="grid gap-6 px-6 py-5 md:grid-cols-2">
+        <div className="space-y-4">
+          <div>
+            <p className="section-eyebrow">AI rationale</p>
+            <p className="mt-1.5 text-[13.5px] leading-relaxed text-[var(--color-ink)]">{draft.rationale}</p>
+          </div>
+          <div>
+            <p className="section-eyebrow">Lead context</p>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--color-body-text)] whitespace-pre-line">
+              {lead.last_touchpoint_summary}
+            </p>
+          </div>
           {lead.notes && (
-            <>
-              <p className="mt-3 text-xs font-semibold uppercase tracking-wider text-stone-500">Internal notes</p>
-              <p className="mt-1 text-sm text-stone-600">{lead.notes}</p>
-            </>
+            <div>
+              <p className="section-eyebrow">Internal notes</p>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--color-muted)]">{lead.notes}</p>
+            </div>
           )}
         </div>
         <form action={editDraft} className="space-y-3">
@@ -107,33 +116,20 @@ function DraftCard({ draft }: { draft: DraftWithLead }) {
           <Field label="Email subject" name="email_subject" defaultValue={draft.email_subject ?? ''} />
           <Field label="Email body" name="email_body" defaultValue={draft.email_body ?? ''} rows={5} />
           <Field label="Call opener (Marcus reads aloud)" name="call_opener" defaultValue={draft.call_opener ?? ''} rows={2} />
-          <button
-            type="submit"
-            className="rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
-          >
+          <button type="submit" className="btn-secondary">
             Save edits
           </button>
         </form>
       </div>
 
-      <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-stone-100 bg-stone-50 px-5 py-3">
+      <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-[var(--color-hairline-soft)] bg-[var(--color-surface-soft)] px-6 py-3">
         <form action={rejectDraftForm}>
           <input type="hidden" name="draftId" value={draft.id} />
-          <button
-            type="submit"
-            className="rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
-          >
-            Reject
-          </button>
+          <button type="submit" className="btn-ghost">Reject</button>
         </form>
         <form action={approveDraftForm}>
           <input type="hidden" name="draftId" value={draft.id} />
-          <button
-            type="submit"
-            className="rounded-md bg-emerald-700 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-800"
-          >
-            Approve & queue to outbox
-          </button>
+          <button type="submit" className="btn-primary">Approve & queue to outbox</button>
         </form>
       </footer>
     </article>
@@ -151,22 +147,15 @@ function Field({
   defaultValue: string;
   rows?: number;
 }) {
+  const baseInput =
+    'mt-1 block w-full rounded-[10px] border border-[var(--color-hairline)] bg-[var(--color-canvas)] px-3 py-2 text-[13.5px] text-[var(--color-ink)] focus:border-[var(--color-ink)] focus:outline-none';
   return (
     <label className="block">
-      <span className="text-xs font-semibold uppercase tracking-wider text-stone-500">{label}</span>
+      <span className="section-eyebrow">{label}</span>
       {rows > 1 ? (
-        <textarea
-          name={name}
-          defaultValue={defaultValue}
-          rows={rows}
-          className="mt-1 block w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-stone-400 focus:outline-none"
-        />
+        <textarea name={name} defaultValue={defaultValue} rows={rows} className={baseInput} />
       ) : (
-        <input
-          name={name}
-          defaultValue={defaultValue}
-          className="mt-1 block w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-stone-400 focus:outline-none"
-        />
+        <input name={name} defaultValue={defaultValue} className={baseInput} />
       )}
     </label>
   );

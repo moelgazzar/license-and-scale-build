@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 const STATUS_FILTERS: Array<{ key: 'all' | LeadStatus; label: string }> = [
   { key: 'all', label: 'All' },
   { key: 'new', label: 'New' },
-  { key: 'generated', label: 'Generated' },
+  { key: 'generated', label: 'Drafted' },
   { key: 'approved', label: 'Approved' },
   { key: 'sent', label: 'Sent' },
   { key: 'replied', label: 'Replied' },
@@ -26,86 +26,209 @@ export default async function DashboardPage({
 
   const supabase = getServerClient();
   let query = supabase.from('closed_lost_leads').select('*').order('est_project_value', { ascending: false });
-  if (status !== 'all') {
-    query = query.eq('status', status);
-  }
-  if (minValue > 0) {
-    query = query.gte('est_project_value', minValue);
-  }
-  const { data: leadsRaw, error } = await query;
-  if (error) {
-    return <ErrorBanner message={`Supabase query failed: ${error.message}`} />;
-  }
-  const leads: ClosedLostLead[] = (leadsRaw ?? []) as ClosedLostLead[];
+  if (status !== 'all') query = query.eq('status', status);
+  if (minValue > 0) query = query.gte('est_project_value', minValue);
 
-  const counts = await getStatusCounts(supabase);
+  const [leadsRes, kpisRes] = await Promise.all([query, getKpis(supabase)]);
+
+  if (leadsRes.error) {
+    return <ErrorBanner message={`Supabase query failed: ${leadsRes.error.message}`} />;
+  }
+  const leads: ClosedLostLead[] = (leadsRes.data ?? []) as ClosedLostLead[];
   const totalValue = leads.reduce((sum, l) => sum + (Number(l.est_project_value) || 0), 0);
 
   return (
-    <div className="space-y-8">
-      <header className="flex flex-col gap-2">
-        <p className="text-sm uppercase tracking-wider text-stone-500">Dashboard</p>
-        <h1 className="text-3xl font-semibold tracking-tight">Closed-Lost Reactivation</h1>
-        <p className="max-w-2xl text-stone-600">
-          1,400+ closed-lost leads sit in GHL with sunk CAC. This control center re-engages them: select high-value
-          leads, generate Marcus-voice drafts, review, approve, and route to the outbox for GHL dispatch.
-        </p>
+    <div className="space-y-10">
+      <Hero leadCount={kpisRes.totalLeads} latentValue={kpisRes.latentValue} />
+      <WorkflowStrip />
+      <KpiRow kpis={kpisRes} />
+      <LeadsSection
+        leads={leads}
+        status={status}
+        totalValue={totalValue}
+      />
+    </div>
+  );
+}
+
+function Hero({ leadCount, latentValue }: { leadCount: number; latentValue: number }) {
+  return (
+    <section className="space-y-3">
+      <p className="section-eyebrow">Closed-Lost Reactivation Control Center</p>
+      <h1 className="text-[28px] font-semibold leading-tight tracking-tight text-[var(--color-ink)]">
+        Turn stale GHL leads into reviewed, personalized follow-ups.
+      </h1>
+      <p className="max-w-2xl text-[15px] leading-relaxed text-[var(--color-body-text)]">
+        This is the approval console for Marcus and the office team. AI drafts the SMS, email, and call opener for each
+        cold lead in his voice. Nothing leaves the building until a human approves it. Hot replies ping Telegram immediately.
+      </p>
+      <p className="text-[13px] text-[var(--color-muted)]">
+        {leadCount.toLocaleString()} cold leads in the pipeline · ~${Math.round(latentValue).toLocaleString()} of latent project value
+      </p>
+    </section>
+  );
+}
+
+function WorkflowStrip() {
+  const steps: Array<{ n: number; title: string; copy: string; href: string; cta: string }> = [
+    {
+      n: 1,
+      title: 'Generate reactivation drafts',
+      copy: 'Pick high-value cold leads. AI writes a personal SMS, email, and call opener in Marcus’s voice.',
+      href: '#leads',
+      cta: 'Pick leads ↓',
+    },
+    {
+      n: 2,
+      title: 'Approve outreach',
+      copy: 'Review every draft. Edit if needed. Approving queues messages to the outbox and pings Telegram.',
+      href: '/queue',
+      cta: 'Open queue →',
+    },
+    {
+      n: 3,
+      title: 'Follow up on hot replies',
+      copy: 'Inbound replies are auto-classified hot / warm / not interested. Hot replies alert the team to call back.',
+      href: '/replies',
+      cta: 'See replies →',
+    },
+  ];
+  return (
+    <section aria-label="Workflow" className="card grid gap-0 md:grid-cols-3">
+      {steps.map((s, i) => (
+        <div
+          key={s.n}
+          className={
+            'flex flex-col gap-3 p-6 ' +
+            (i < steps.length - 1 ? 'md:border-r md:border-[var(--color-hairline-soft)]' : '')
+          }
+        >
+          <div className="flex items-center gap-2.5">
+            <span className={`step-pill ${s.n === 1 ? 'step-pill-active' : ''}`}>{s.n}</span>
+            <h3 className="text-[15px] font-semibold text-[var(--color-ink)]">{s.title}</h3>
+          </div>
+          <p className="text-[13.5px] leading-relaxed text-[var(--color-body-text)]">{s.copy}</p>
+          <Link href={s.href} className="text-[13px] font-medium text-rausch hover:underline">
+            {s.cta}
+          </Link>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function KpiRow({ kpis }: { kpis: KpiResult }) {
+  return (
+    <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <KpiCard label="Closed-lost leads" value={kpis.totalLeads} hint="In the cold pile" />
+      <KpiCard label="Drafts pending approval" value={kpis.draftsPending} hint="Need Marcus’s review" highlight={kpis.draftsPending > 0} href="/queue" />
+      <KpiCard label="Approved outbox messages" value={kpis.outboxQueued + kpis.outboxSent} hint={`${kpis.outboxQueued} queued · ${kpis.outboxSent} sent (simulated)`} href="/outbox" />
+      <KpiCard label="Hot replies" value={kpis.hotReplies} hint="Telegram-alerted" highlight={kpis.hotReplies > 0} href="/replies" />
+    </section>
+  );
+}
+
+function KpiCard({
+  label,
+  value,
+  hint,
+  href,
+  highlight = false,
+}: {
+  label: string;
+  value: number;
+  hint: string;
+  href?: string;
+  highlight?: boolean;
+}) {
+  const inner = (
+    <div
+      className={
+        'rounded-[14px] border px-5 py-4 transition ' +
+        (highlight
+          ? 'border-[var(--color-rausch)] bg-[var(--color-rausch-soft)]'
+          : 'border-[var(--color-hairline-soft)] bg-[var(--color-canvas)] hover:bg-[var(--color-surface-soft)]')
+      }
+    >
+      <p className="section-eyebrow">{label}</p>
+      <p className="mt-2 text-[26px] font-semibold tabular-nums text-[var(--color-ink)] leading-none">{value.toLocaleString()}</p>
+      <p className="mt-1.5 text-[12.5px] text-[var(--color-muted)]">{hint}</p>
+    </div>
+  );
+  return href ? (
+    <Link href={href} className="block">
+      {inner}
+    </Link>
+  ) : (
+    inner
+  );
+}
+
+function LeadsSection({
+  leads,
+  status,
+  totalValue,
+}: {
+  leads: ClosedLostLead[];
+  status: 'all' | LeadStatus;
+  totalValue: number;
+}) {
+  return (
+    <section id="leads" className="card overflow-hidden">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--color-hairline-soft)] px-6 py-5">
+        <div>
+          <h2 className="text-[18px] font-semibold tracking-tight text-[var(--color-ink)]">Step 1 · Pick leads to reactivate</h2>
+          <p className="mt-1 text-[13px] text-[var(--color-muted)]">
+            Showing {leads.length} lead{leads.length === 1 ? '' : 's'} · est. value ${Math.round(totalValue).toLocaleString()} ·
+            check the boxes for the leads you want drafts for, then click Generate.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {STATUS_FILTERS.map((f) => (
+            <Link
+              key={f.key}
+              href={f.key === 'all' ? '/' : `/?status=${f.key}`}
+              className={`filter-pill ${f.key === status ? 'filter-pill-active' : ''}`}
+            >
+              {f.label}
+            </Link>
+          ))}
+        </div>
       </header>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Leads in pipeline" value={String(counts.total)} />
-        <Stat label="Pending review" value={String(counts.generated)} />
-        <Stat label="Approved" value={String(counts.approved)} />
-        <Stat label="Replied" value={String(counts.replied)} />
-      </div>
-
-      <section className="rounded-xl border border-stone-200 bg-white">
-        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-stone-200 px-5 py-4">
-          <div>
-            <h2 className="text-lg font-semibold">Cold leads</h2>
-            <p className="text-sm text-stone-500">
-              Showing {leads.length} lead{leads.length === 1 ? '' : 's'} · est. value $
-              {Math.round(totalValue).toLocaleString()}
+      {leads.length === 0 ? (
+        <div className="px-6 py-10">
+          <div className="empty-state">
+            <h3>No leads in this filter</h3>
+            <p>
+              Switch the filter back to <Link href="/" className="text-rausch hover:underline">All</Link> to see the cold pile.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-1 text-sm">
-            {STATUS_FILTERS.map((f) => (
-              <Link
-                key={f.key}
-                href={f.key === 'all' ? '/' : `/?status=${f.key}`}
-                className={
-                  f.key === status
-                    ? 'rounded-md bg-stone-900 px-3 py-1 text-white'
-                    : 'rounded-md px-3 py-1 text-stone-700 hover:bg-stone-100'
-                }
-              >
-                {f.label}
-              </Link>
-            ))}
-          </div>
-        </header>
-
+        </div>
+      ) : (
         <form action={generateDraftsForm}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-stone-50 text-left text-xs uppercase tracking-wider text-stone-500">
+            <table className="w-full text-[13.5px]">
+              <thead className="bg-[var(--color-surface-soft)] text-left text-[11px] uppercase tracking-wider text-[var(--color-muted)]">
                 <tr>
-                  <th className="w-10 px-5 py-3" />
-                  <th className="px-3 py-3">Name</th>
-                  <th className="px-3 py-3">City</th>
-                  <th className="px-3 py-3">Project</th>
-                  <th className="px-3 py-3">Est. value</th>
-                  <th className="px-3 py-3">Status</th>
-                  <th className="px-3 py-3">Reason lost</th>
-                  <th className="px-3 py-3">Cold for</th>
-                  <th className="px-3 py-3">Attempts</th>
+                  <th className="w-10 px-6 py-3" />
+                  <th className="px-3 py-3 font-semibold">Name</th>
+                  <th className="px-3 py-3 font-semibold">City</th>
+                  <th className="px-3 py-3 font-semibold">Project</th>
+                  <th className="px-3 py-3 font-semibold">Est. value</th>
+                  <th className="px-3 py-3 font-semibold">Status</th>
+                  <th className="px-3 py-3 font-semibold">Reason lost</th>
+                  <th className="px-3 py-3 font-semibold">Cold for</th>
+                  <th className="px-3 py-3 font-semibold">Attempts</th>
                   <th className="px-3 py-3" />
                 </tr>
               </thead>
               <tbody>
                 {leads.map((lead) => {
                   const eligible =
-                    lead.attempt_count < 3 && lead.status !== 'do_not_contact' && lead.status !== 'max_attempts_reached';
+                    lead.attempt_count < 3 &&
+                    lead.status !== 'do_not_contact' &&
+                    lead.status !== 'max_attempts_reached';
                   const months = lead.last_touchpoint_at
                     ? Math.round(
                         (Date.now() - new Date(lead.last_touchpoint_at).getTime()) /
@@ -113,25 +236,28 @@ export default async function DashboardPage({
                       )
                     : null;
                   return (
-                    <tr key={lead.id} className="border-t border-stone-100 align-top hover:bg-stone-50">
-                      <td className="px-5 py-3">
+                    <tr
+                      key={lead.id}
+                      className="border-t border-[var(--color-hairline-soft)] align-top hover:bg-[var(--color-surface-soft)]"
+                    >
+                      <td className="px-6 py-3">
                         <input
                           type="checkbox"
                           name="leadId"
                           value={lead.id}
                           disabled={!eligible}
-                          className="h-4 w-4 cursor-pointer rounded border-stone-300"
+                          className="h-4 w-4 cursor-pointer rounded border-[var(--color-hairline)] accent-[var(--color-rausch)]"
                           aria-label={`Select ${lead.first_name} ${lead.last_name ?? ''}`}
                         />
                       </td>
-                      <td className="px-3 py-3 font-medium">
+                      <td className="px-3 py-3 font-semibold text-[var(--color-ink)]">
                         <Link href={`/leads/${lead.id}`} className="hover:underline">
                           {lead.first_name} {lead.last_name ?? ''}
                         </Link>
                       </td>
-                      <td className="px-3 py-3 text-stone-600">{lead.city ?? '-'}</td>
-                      <td className="px-3 py-3 text-stone-700">{lead.project_type ?? '-'}</td>
-                      <td className="px-3 py-3 tabular-nums">
+                      <td className="px-3 py-3 text-[var(--color-body-text)]">{lead.city ?? '-'}</td>
+                      <td className="px-3 py-3 text-[var(--color-body-text)]">{lead.project_type ?? '-'}</td>
+                      <td className="px-3 py-3 tabular-nums font-medium text-[var(--color-ink)]">
                         {lead.est_project_value
                           ? `$${Math.round(Number(lead.est_project_value)).toLocaleString()}`
                           : '-'}
@@ -139,60 +265,41 @@ export default async function DashboardPage({
                       <td className="px-3 py-3">
                         <StatusBadge status={lead.status} />
                       </td>
-                      <td className="px-3 py-3 text-stone-600">{lead.reason_lost ?? '-'}</td>
-                      <td className="px-3 py-3 text-stone-600">{months !== null ? `${months}mo` : '-'}</td>
-                      <td className="px-3 py-3 tabular-nums text-stone-600">{lead.attempt_count}/3</td>
+                      <td className="px-3 py-3 text-[var(--color-body-text)]">{lead.reason_lost ?? '-'}</td>
+                      <td className="px-3 py-3 text-[var(--color-body-text)]">{months !== null ? `${months}mo` : '-'}</td>
+                      <td className="px-3 py-3 tabular-nums text-[var(--color-body-text)]">{lead.attempt_count}/3</td>
                       <td className="px-3 py-3">
-                        <Link href={`/leads/${lead.id}`} className="text-emerald-700 hover:underline">
-                          Detail →
+                        <Link href={`/leads/${lead.id}`} className="text-[13px] font-medium text-rausch hover:underline">
+                          Open →
                         </Link>
                       </td>
                     </tr>
                   );
                 })}
-                {leads.length === 0 && (
-                  <tr>
-                    <td colSpan={10} className="px-5 py-12 text-center text-stone-500">
-                      No leads matching this filter.
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
-          <footer className="flex flex-wrap items-center justify-between gap-4 border-t border-stone-200 bg-stone-50 px-5 py-4 text-sm">
-            <p className="text-stone-600">
-              Select leads above. Eligibility: attempts &lt; 3 and not do-not-contact.
+          <footer className="flex flex-wrap items-center justify-between gap-4 border-t border-[var(--color-hairline-soft)] bg-[var(--color-surface-soft)] px-6 py-4">
+            <p className="text-[13px] text-[var(--color-muted)]">
+              Eligibility: less than 3 attempts and not opted out. Each generation costs ~$0.005 with gpt-4.1-mini.
             </p>
-            <button
-              type="submit"
-              className="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 active:bg-emerald-900"
-            >
-              Generate drafts for selected
+            <button type="submit" className="btn-primary">
+              Generate reactivation drafts
             </button>
           </footer>
         </form>
-      </section>
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-stone-200 bg-white px-5 py-4">
-      <p className="text-xs uppercase tracking-wider text-stone-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
-    </div>
+      )}
+    </section>
   );
 }
 
 function StatusBadge({ status }: { status: LeadStatus }) {
-  return <span className={`status-badge status-${status}`}>{status.replace(/_/g, ' ')}</span>;
+  return <span className={`badge status-${status}`}>{status.replace(/_/g, ' ')}</span>;
 }
 
 function ErrorBanner({ message }: { message: string }) {
   return (
-    <div className="rounded-lg border border-rose-200 bg-rose-50 p-6 text-rose-800">
+    <div className="rounded-[14px] border border-rose-200 bg-rose-50 p-6 text-rose-800">
       <p className="font-semibold">Error loading data</p>
       <p className="mt-1 text-sm">{message}</p>
       <p className="mt-3 text-xs text-rose-700">
@@ -203,20 +310,30 @@ function ErrorBanner({ message }: { message: string }) {
   );
 }
 
-async function getStatusCounts(supabase: ReturnType<typeof getServerClient>) {
-  const { data } = await supabase.from('closed_lost_leads').select('status');
-  const rows = data ?? [];
-  const counts = {
-    total: rows.length,
-    new: 0,
-    generated: 0,
-    approved: 0,
-    sent: 0,
-    replied: 0,
-    not_interested: 0,
+interface KpiResult {
+  totalLeads: number;
+  latentValue: number;
+  draftsPending: number;
+  outboxQueued: number;
+  outboxSent: number;
+  hotReplies: number;
+}
+
+async function getKpis(supabase: ReturnType<typeof getServerClient>): Promise<KpiResult> {
+  const [leadsRes, draftsRes, outboxRes, repliesRes] = await Promise.all([
+    supabase.from('closed_lost_leads').select('est_project_value, status'),
+    supabase.from('outreach_drafts').select('status').eq('status', 'pending'),
+    supabase.from('outbox_messages').select('status'),
+    supabase.from('reply_events').select('classification').eq('classification', 'hot'),
+  ]);
+  const leads = (leadsRes.data ?? []) as Array<{ est_project_value: number | null; status: string }>;
+  const outbox = (outboxRes.data ?? []) as Array<{ status: string }>;
+  return {
+    totalLeads: leads.length,
+    latentValue: leads.reduce((s, l) => s + (Number(l.est_project_value) || 0), 0),
+    draftsPending: (draftsRes.data ?? []).length,
+    outboxQueued: outbox.filter((m) => m.status === 'queued').length,
+    outboxSent: outbox.filter((m) => m.status === 'sent_simulated').length,
+    hotReplies: (repliesRes.data ?? []).length,
   };
-  for (const r of rows as Array<{ status: LeadStatus }>) {
-    if (r.status in counts) (counts as Record<string, number>)[r.status]++;
-  }
-  return counts;
 }
