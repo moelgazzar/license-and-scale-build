@@ -45,11 +45,11 @@ export default async function QueuePage({
           Review drafts before anything is sent.
         </h1>
         <p className="max-w-2xl text-[14px] leading-relaxed text-[var(--color-body-text)]">
-          Approving queues SMS and email drafts to the outbox <span className="font-semibold text-[var(--color-ink)]">and</span> sends an internal Telegram notification to the team. <span className="font-semibold text-[var(--color-ink)]">No customer SMS or email is sent in this demo</span> ‚Äî production wires the outbox to GHL/Twilio behind the <code className="rounded bg-[var(--color-surface-strong)] px-1 text-[12px]">GHL_SEND_ENABLED</code> flag.
+          Approving queues SMS and email drafts to the outbox <span className="font-semibold text-[var(--color-ink)]">and</span> sends an internal Telegram notification to the team. <span className="font-semibold text-[var(--color-ink)]">No customer SMS or email is sent in this demo</span> --- production wires the outbox to GHL/Twilio behind the <code className="rounded bg-[var(--color-surface-strong)] px-1 text-[12px]">GHL_SEND_ENABLED</code> flag.
         </p>
         <div>
           <Link href="/" className="text-[13px] font-medium text-rausch hover:underline">
-            ‚Üê Back to leads
+            -Üê Back to leads
           </Link>
         </div>
       </header>
@@ -72,7 +72,7 @@ export default async function QueuePage({
           title={`Generated ${generated} draft${generated === 1 ? '' : 's'}.`}
           body={
             <>
-              Review and approve below. <span className="font-semibold">Telegram fires only after you approve a draft</span> ‚Äî never on generation.
+              Review and approve below. <span className="font-semibold">Telegram fires only after you approve a draft</span> --- never on generation.
               {failed > 0 && (
                 <>
                   {' '}
