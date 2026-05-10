@@ -103,3 +103,14 @@ create table if not exists app_events (
 
 create index if not exists idx_app_events_type on app_events(event_type);
 create index if not exists idx_app_events_lead on app_events(lead_id);
+
+-- Row level security
+-- RLS is enabled on every app table to block direct anon/client reads and writes.
+-- The Next.js app accesses Supabase only through server-side service role calls
+-- (see lib/supabase.ts > getServerClient). The Postgres service role bypasses RLS,
+-- so the app keeps working; no permissive public policies are added.
+alter table closed_lost_leads enable row level security;
+alter table outreach_drafts enable row level security;
+alter table outbox_messages enable row level security;
+alter table reply_events enable row level security;
+alter table app_events enable row level security;
