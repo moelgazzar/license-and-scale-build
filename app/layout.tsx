@@ -25,12 +25,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               <NavLink href="/queue">Approval queue</NavLink>
               <NavLink href="/outbox">Outbox</NavLink>
               <NavLink href="/replies">Replies</NavLink>
-              <Link
-                href="/replies/simulate"
-                className="ml-2 rounded-full border border-[var(--color-hairline)] bg-[var(--color-canvas)] px-3.5 py-1.5 text-[13px] font-medium text-[var(--color-ink)] hover:bg-[var(--color-surface-soft)]"
-              >
-                Simulate reply
-              </Link>
             </nav>
           </div>
         </header>

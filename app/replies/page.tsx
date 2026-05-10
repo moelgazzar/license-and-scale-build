@@ -43,11 +43,8 @@ export default async function RepliesPage() {
           <p className="text-[13px] text-[var(--color-muted)]">{hot} hot repl{hot === 1 ? 'y' : 'ies'} captured.</p>
         )}
         <div className="pt-1">
-          <Link
-            href="/replies/simulate"
-            className="btn-primary text-[13.5px] px-4 py-2"
-          >
-            + Simulate a reply
+          <Link href="/replies/simulate" className="text-[12.5px] text-[var(--color-muted)] underline-offset-2 hover:text-rausch hover:underline">
+            Demo: simulate reply →
           </Link>
         </div>
       </header>
@@ -56,8 +53,8 @@ export default async function RepliesPage() {
         <div className="empty-state">
           <h3>No replies yet</h3>
           <p>
-            Use the <Link href="/replies/simulate" className="text-rausch hover:underline">Simulate Reply</Link> page to paste a
-            customer reply and see how the classifier reacts. Production wires this same flow to a real inbound webhook.
+            In production a GHL or Twilio webhook delivers replies here automatically. To test the classifier, use the{' '}
+            <Link href="/replies/simulate" className="text-rausch hover:underline">demo simulator</Link>.
           </p>
         </div>
       )}

@@ -35,7 +35,7 @@ export default async function DashboardPage({
   searchParams: Promise<{ status?: string; min_value?: string; limit?: string; error?: string }>;
 }) {
   const sp = await searchParams;
-  const status = (sp.status ?? 'all') as 'all' | LeadStatus;
+  const status = (sp.status ?? 'new') as 'all' | LeadStatus;
   const minValue = Number(sp.min_value ?? 0);
   const limit = PAGE_SIZES.includes(Number(sp.limit)) ? Number(sp.limit) : DEFAULT_PAGE_SIZE;
   const errorKey = sp.error;
@@ -57,6 +57,8 @@ export default async function DashboardPage({
   }
   const leads: ClosedLostLead[] = (leadsRes.data ?? []) as ClosedLostLead[];
 
+  const showGenerateUi = status === 'new';
+
   return (
     <div className="space-y-10">
       <Hero leadCount={kpisRes.totalLeads} latentValue={kpisRes.latentValue} />
@@ -65,12 +67,13 @@ export default async function DashboardPage({
       )}
       <WorkflowStrip />
       <KpiRow kpis={kpisRes} />
-      <PrimaryCtaCard />
+      {showGenerateUi && <PrimaryCtaCard />}
       <LeadsSection
         leads={leads}
         status={status}
         limit={limit}
         totalForFilter={totalForFilterRes}
+        showGenerateUi={showGenerateUi}
       />
     </div>
   );
@@ -84,8 +87,7 @@ function Hero({ leadCount, latentValue }: { leadCount: number; latentValue: numb
         Turn stale GHL leads into reviewed, personalized follow-ups.
       </h1>
       <p className="max-w-2xl text-[15px] leading-relaxed text-[var(--color-body-text)]">
-        This is the approval console for Marcus and the office team. AI drafts the SMS, email, and call opener for each
-        cold lead in his voice. Nothing leaves the building until a human approves it. Hot replies ping Telegram immediately.
+        Review old GHL leads, generate Marcus-style follow-up drafts, and approve the best ones for outreach.
       </p>
       <p className="text-[13px] text-[var(--color-muted)]">
         {leadCount.toLocaleString()} cold leads in the pipeline · ~${Math.round(latentValue).toLocaleString()} of latent project value
@@ -229,26 +231,28 @@ function LeadsSection({
   status,
   limit,
   totalForFilter,
+  showGenerateUi,
 }: {
   leads: ClosedLostLead[];
   status: 'all' | LeadStatus;
   limit: number;
   totalForFilter: number;
+  showGenerateUi: boolean;
 }) {
   const totalValue = leads.reduce((sum, l) => sum + (Number(l.est_project_value) || 0), 0);
   const buildLimitHref = (n: number) => {
     const params = new URLSearchParams();
-    if (status !== 'all') params.set('status', status);
+    if (status !== 'new') params.set('status', status);
     if (n !== DEFAULT_PAGE_SIZE) params.set('limit', String(n));
     const qs = params.toString();
-    return qs ? `/?${qs}#generate` : `/#generate`;
+    return qs ? `/?${qs}` : '/';
   };
   const buildStatusHref = (key: 'all' | LeadStatus) => {
     const params = new URLSearchParams();
-    if (key !== 'all') params.set('status', key);
+    if (key !== 'new') params.set('status', key);
     if (limit !== DEFAULT_PAGE_SIZE) params.set('limit', String(limit));
     const qs = params.toString();
-    return qs ? `/?${qs}#generate` : `/#generate`;
+    return qs ? `/?${qs}` : '/';
   };
 
   return (
@@ -292,13 +296,12 @@ function LeadsSection({
           <div className="empty-state">
             <h3>No leads in this filter</h3>
             <p>
-              Switch the filter back to <Link href="/" className="text-rausch hover:underline">All</Link> to see the cold pile.
+              Switch the filter back to <Link href="/" className="text-rausch hover:underline">New</Link> to see the cold pile.
             </p>
           </div>
         </div>
-      ) : (
+      ) : showGenerateUi ? (
         <form action={generateDraftsForm}>
-          {/* Single submit bar at the top of the table - the only Generate button on this section */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-hairline-soft)] bg-[var(--color-surface-soft)] px-6 py-3">
             <p className="text-[12.5px] text-[var(--color-muted)]">
               Tick the boxes below, then click Generate. Eligibility: less than 3 attempts and not opted out. Telegram fires only after approval, never on generation.
@@ -307,82 +310,102 @@ function LeadsSection({
               Generate selected drafts
             </button>
           </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-[13.5px]">
-              <thead className="bg-[var(--color-surface-soft)] text-left text-[11px] uppercase tracking-wider text-[var(--color-muted)]">
-                <tr>
-                  <th className="w-10 px-6 py-3" />
-                  <th className="px-3 py-3 font-semibold">Name</th>
-                  <th className="px-3 py-3 font-semibold">City</th>
-                  <th className="px-3 py-3 font-semibold">Project</th>
-                  <th className="px-3 py-3 font-semibold">Est. value</th>
-                  <th className="px-3 py-3 font-semibold">Status</th>
-                  <th className="px-3 py-3 font-semibold">Reason lost</th>
-                  <th className="px-3 py-3 font-semibold">Cold for</th>
-                  <th className="px-3 py-3 font-semibold">Attempts</th>
-                  <th className="px-3 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {leads.map((lead) => {
-                  const eligible =
-                    lead.attempt_count < 3 &&
-                    lead.status !== 'do_not_contact' &&
-                    lead.status !== 'max_attempts_reached';
-                  const months = lead.last_touchpoint_at
-                    ? Math.round(
-                        (Date.now() - new Date(lead.last_touchpoint_at).getTime()) /
-                          (1000 * 60 * 60 * 24 * 30),
-                      )
-                    : null;
-                  return (
-                    <tr
-                      key={lead.id}
-                      className="border-t border-[var(--color-hairline-soft)] align-top hover:bg-[var(--color-surface-soft)]"
-                    >
-                      <td className="px-6 py-3">
-                        <input
-                          type="checkbox"
-                          name="leadId"
-                          value={lead.id}
-                          disabled={!eligible}
-                          className="h-4 w-4 cursor-pointer rounded border-[var(--color-hairline)] accent-[var(--color-rausch)]"
-                          aria-label={`Select ${lead.first_name} ${lead.last_name ?? ''}`}
-                        />
-                      </td>
-                      <td className="px-3 py-3 font-semibold text-[var(--color-ink)]">
-                        <Link href={`/leads/${lead.id}`} className="hover:underline">
-                          {lead.first_name} {lead.last_name ?? ''}
-                        </Link>
-                      </td>
-                      <td className="px-3 py-3 text-[var(--color-body-text)]">{lead.city ?? '-'}</td>
-                      <td className="px-3 py-3 text-[var(--color-body-text)]">{lead.project_type ?? '-'}</td>
-                      <td className="px-3 py-3 tabular-nums font-medium text-[var(--color-ink)]">
-                        {lead.est_project_value
-                          ? `$${Math.round(Number(lead.est_project_value)).toLocaleString()}`
-                          : '-'}
-                      </td>
-                      <td className="px-3 py-3">
-                        <StatusBadge status={lead.status} />
-                      </td>
-                      <td className="px-3 py-3 text-[var(--color-body-text)]">{lead.reason_lost ?? '-'}</td>
-                      <td className="px-3 py-3 text-[var(--color-body-text)]">{months !== null ? `${months}mo` : '-'}</td>
-                      <td className="px-3 py-3 tabular-nums text-[var(--color-body-text)]">{lead.attempt_count}/3</td>
-                      <td className="px-3 py-3">
-                        <Link href={`/leads/${lead.id}`} className="text-[13px] font-medium text-rausch hover:underline">
-                          Open →
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <LeadsTable leads={leads} withCheckbox />
         </form>
+      ) : (
+        <>
+          <div className="border-b border-[var(--color-hairline-soft)] bg-[var(--color-surface-soft)] px-6 py-3">
+            <p className="text-[12.5px] text-[var(--color-muted)]">
+              Draft generation is only available for{' '}
+              <Link href="/" className="font-medium text-rausch hover:underline">
+                New
+              </Link>{' '}
+              leads. This is a read-only view of leads in <span className="font-medium text-[var(--color-ink)]">{status}</span> status.
+            </p>
+          </div>
+          <LeadsTable leads={leads} withCheckbox={false} />
+        </>
       )}
     </section>
+  );
+}
+
+function LeadsTable({ leads, withCheckbox }: { leads: ClosedLostLead[]; withCheckbox: boolean }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-[13.5px]">
+        <thead className="bg-[var(--color-surface-soft)] text-left text-[11px] uppercase tracking-wider text-[var(--color-muted)]">
+          <tr>
+            {withCheckbox && <th className="w-10 px-6 py-3" />}
+            <th className="px-3 py-3 font-semibold">Name</th>
+            <th className="px-3 py-3 font-semibold">City</th>
+            <th className="px-3 py-3 font-semibold">Project</th>
+            <th className="px-3 py-3 font-semibold">Est. value</th>
+            <th className="px-3 py-3 font-semibold">Status</th>
+            <th className="px-3 py-3 font-semibold">Reason lost</th>
+            <th className="px-3 py-3 font-semibold">Cold for</th>
+            <th className="px-3 py-3 font-semibold">Attempts</th>
+            <th className="px-3 py-3" />
+          </tr>
+        </thead>
+        <tbody>
+          {leads.map((lead) => {
+            const eligible =
+              lead.attempt_count < 3 &&
+              lead.status !== 'do_not_contact' &&
+              lead.status !== 'max_attempts_reached';
+            const months = lead.last_touchpoint_at
+              ? Math.round(
+                  (Date.now() - new Date(lead.last_touchpoint_at).getTime()) /
+                    (1000 * 60 * 60 * 24 * 30),
+                )
+              : null;
+            return (
+              <tr
+                key={lead.id}
+                className="border-t border-[var(--color-hairline-soft)] align-top hover:bg-[var(--color-surface-soft)]"
+              >
+                {withCheckbox && (
+                  <td className="px-6 py-3">
+                    <input
+                      type="checkbox"
+                      name="leadId"
+                      value={lead.id}
+                      disabled={!eligible}
+                      className="h-4 w-4 cursor-pointer rounded border-[var(--color-hairline)] accent-[var(--color-rausch)]"
+                      aria-label={`Select ${lead.first_name} ${lead.last_name ?? ''}`}
+                    />
+                  </td>
+                )}
+                <td className={`${withCheckbox ? '' : 'pl-6 '}px-3 py-3 font-semibold text-[var(--color-ink)]`}>
+                  <Link href={`/leads/${lead.id}`} className="hover:underline">
+                    {lead.first_name} {lead.last_name ?? ''}
+                  </Link>
+                </td>
+                <td className="px-3 py-3 text-[var(--color-body-text)]">{lead.city ?? '-'}</td>
+                <td className="px-3 py-3 text-[var(--color-body-text)]">{lead.project_type ?? '-'}</td>
+                <td className="px-3 py-3 tabular-nums font-medium text-[var(--color-ink)]">
+                  {lead.est_project_value
+                    ? `$${Math.round(Number(lead.est_project_value)).toLocaleString()}`
+                    : '-'}
+                </td>
+                <td className="px-3 py-3">
+                  <StatusBadge status={lead.status} />
+                </td>
+                <td className="px-3 py-3 text-[var(--color-body-text)]">{lead.reason_lost ?? '-'}</td>
+                <td className="px-3 py-3 text-[var(--color-body-text)]">{months !== null ? `${months}mo` : '-'}</td>
+                <td className="px-3 py-3 tabular-nums text-[var(--color-body-text)]">{lead.attempt_count}/3</td>
+                <td className="px-3 py-3">
+                  <Link href={`/leads/${lead.id}`} className="text-[13px] font-medium text-rausch hover:underline">
+                    Open →
+                  </Link>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

@@ -48,9 +48,12 @@ export default async function OutboxPage({
         {queuedCount > 0 && (
           <p className="text-[13px] text-[var(--color-muted)]">{queuedCount} message{queuedCount === 1 ? '' : 's'} ready to dispatch.</p>
         )}
-        <div>
+        <div className="flex flex-wrap items-center gap-4">
           <Link href="/queue" className="text-[13px] font-medium text-rausch hover:underline">
             ← Approval queue
+          </Link>
+          <Link href="/replies/simulate" className="text-[12.5px] text-[var(--color-muted)] underline-offset-2 hover:text-rausch hover:underline">
+            Demo: simulate reply →
           </Link>
         </div>
       </header>
