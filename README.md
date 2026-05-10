@@ -2,7 +2,9 @@
 
 Internal tool that re-engages closed-lost leads from GHL with personalized, Marcus-voice SMS / email / call drafts. Built for the License and Scale AI Implementation Specialist take-home (Mohamed Elgazzar, May 2026).
 
-> Strategy doc: see `docs/strategy.md` in the case-file repo, or the link in the submission email. The P0 build is what this repo contains.
+> **Strategy document:** [`docs/strategy.md`](./docs/strategy.md) - 2-page ranking of the top 5 AI agents for Greenscape Pro with explicit pushback on the founder's stated priorities. The P0 build is what this repo contains.
+>
+> **Live deployment:** https://license-and-scale-build.vercel.app
 
 ## What it does
 
