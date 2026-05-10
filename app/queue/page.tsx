@@ -49,7 +49,7 @@ export default async function QueuePage({
         </p>
         <div>
           <Link href="/" className="text-[13px] font-medium text-rausch hover:underline">
-            -← Back to leads
+            ← Back to leads
           </Link>
         </div>
       </header>
