@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getServerClient } from '@/lib/supabase';
-import { generateDraftsForm } from './actions';
+import { generateDraftsForm, generateTopThreeForm } from './actions';
 import type { ClosedLostLead, LeadStatus } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -15,37 +15,62 @@ const STATUS_FILTERS: Array<{ key: 'all' | LeadStatus; label: string }> = [
   { key: 'not_interested', label: 'Not interested' },
 ];
 
+const PAGE_SIZES = [5, 10, 25];
+const DEFAULT_PAGE_SIZE = 10;
+
+const ERRORS: Record<string, { title: string; body: string }> = {
+  no_leads: {
+    title: 'No leads selected',
+    body: 'Tick the checkbox on at least one lead, then hit Generate. Or use Generate top 3 high-value drafts for a one-click demo.',
+  },
+  no_eligible: {
+    title: 'No eligible leads for the quick demo',
+    body: 'No leads in status "new" with fewer than 3 attempts. Reset a lead\'s status in Supabase or pick from the table below.',
+  },
+};
+
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; min_value?: string }>;
+  searchParams: Promise<{ status?: string; min_value?: string; limit?: string; error?: string }>;
 }) {
   const sp = await searchParams;
   const status = (sp.status ?? 'all') as 'all' | LeadStatus;
   const minValue = Number(sp.min_value ?? 0);
+  const limit = PAGE_SIZES.includes(Number(sp.limit)) ? Number(sp.limit) : DEFAULT_PAGE_SIZE;
+  const errorKey = sp.error;
 
   const supabase = getServerClient();
   let query = supabase.from('closed_lost_leads').select('*').order('est_project_value', { ascending: false });
   if (status !== 'all') query = query.eq('status', status);
   if (minValue > 0) query = query.gte('est_project_value', minValue);
+  query = query.limit(limit);
 
-  const [leadsRes, kpisRes] = await Promise.all([query, getKpis(supabase)]);
+  const [leadsRes, kpisRes, totalForFilterRes] = await Promise.all([
+    query,
+    getKpis(supabase),
+    getTotalForFilter(supabase, status),
+  ]);
 
   if (leadsRes.error) {
     return <ErrorBanner message={`Supabase query failed: ${leadsRes.error.message}`} />;
   }
   const leads: ClosedLostLead[] = (leadsRes.data ?? []) as ClosedLostLead[];
-  const totalValue = leads.reduce((sum, l) => sum + (Number(l.est_project_value) || 0), 0);
 
   return (
     <div className="space-y-10">
       <Hero leadCount={kpisRes.totalLeads} latentValue={kpisRes.latentValue} />
+      {errorKey && ERRORS[errorKey] && (
+        <Banner kind="error" title={ERRORS[errorKey].title} body={ERRORS[errorKey].body} />
+      )}
       <WorkflowStrip />
       <KpiRow kpis={kpisRes} />
+      <PrimaryCtaCard />
       <LeadsSection
         leads={leads}
         status={status}
-        totalValue={totalValue}
+        limit={limit}
+        totalForFilter={totalForFilterRes}
       />
     </div>
   );
@@ -75,7 +100,7 @@ function WorkflowStrip() {
       n: 1,
       title: 'Generate reactivation drafts',
       copy: 'Pick high-value cold leads. AI writes a personal SMS, email, and call opener in Marcus’s voice.',
-      href: '#leads',
+      href: '#generate',
       cta: 'Pick leads ↓',
     },
     {
@@ -164,35 +189,101 @@ function KpiCard({
   );
 }
 
+function PrimaryCtaCard() {
+  return (
+    <section id="generate" className="card overflow-hidden border-2 border-[var(--color-rausch)]/30">
+      <div className="bg-[var(--color-rausch-soft)] px-6 py-5">
+        <p className="section-eyebrow">Step 1 · Generate</p>
+        <h2 className="mt-1 text-[20px] font-semibold tracking-tight text-[var(--color-ink)]">
+          Generate AI reactivation drafts
+        </h2>
+        <p className="mt-1.5 max-w-2xl text-[13.5px] leading-relaxed text-[var(--color-body-text)]">
+          <span className="font-semibold text-[var(--color-ink)]">Step 1:</span> select leads in the table below.{' '}
+          <span className="font-semibold text-[var(--color-ink)]">Step 2:</span> generate AI drafts.{' '}
+          <span className="font-semibold text-[var(--color-ink)]">Step 3:</span> review and approve in the queue. Telegram fires
+          only after approval, never on generation.
+        </p>
+        <p className="mt-1 text-[12.5px] text-[var(--color-muted)]">
+          This does not send customer messages. It only creates drafts for review. Cost: ~$0.005 per lead with gpt-4.1-mini.
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-3 border-t border-[var(--color-hairline-soft)] bg-[var(--color-canvas)] px-6 py-4">
+        <form action={generateTopThreeForm}>
+          <button type="submit" className="btn-primary">
+            ⚡ Generate top 3 high-value drafts
+          </button>
+        </form>
+        <span className="text-[12.5px] text-[var(--color-muted)]">
+          One-click demo · auto-picks the 3 highest-value cold leads still in <code className="rounded bg-[var(--color-surface-strong)] px-1 text-[11px]">new</code> status.
+        </span>
+        <span className="ml-auto text-[12.5px] text-[var(--color-muted)]">
+          Or manually pick leads below ↓ then click <span className="font-medium text-[var(--color-ink)]">Generate selected</span>.
+        </span>
+      </div>
+    </section>
+  );
+}
+
 function LeadsSection({
   leads,
   status,
-  totalValue,
+  limit,
+  totalForFilter,
 }: {
   leads: ClosedLostLead[];
   status: 'all' | LeadStatus;
-  totalValue: number;
+  limit: number;
+  totalForFilter: number;
 }) {
+  const totalValue = leads.reduce((sum, l) => sum + (Number(l.est_project_value) || 0), 0);
+  const buildLimitHref = (n: number) => {
+    const params = new URLSearchParams();
+    if (status !== 'all') params.set('status', status);
+    if (n !== DEFAULT_PAGE_SIZE) params.set('limit', String(n));
+    const qs = params.toString();
+    return qs ? `/?${qs}#generate` : `/#generate`;
+  };
+  const buildStatusHref = (key: 'all' | LeadStatus) => {
+    const params = new URLSearchParams();
+    if (key !== 'all') params.set('status', key);
+    if (limit !== DEFAULT_PAGE_SIZE) params.set('limit', String(limit));
+    const qs = params.toString();
+    return qs ? `/?${qs}#generate` : `/#generate`;
+  };
+
   return (
-    <section id="leads" className="card overflow-hidden">
+    <section className="card overflow-hidden">
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--color-hairline-soft)] px-6 py-5">
         <div>
-          <h2 className="text-[18px] font-semibold tracking-tight text-[var(--color-ink)]">Step 1 · Pick leads to reactivate</h2>
+          <h2 className="text-[18px] font-semibold tracking-tight text-[var(--color-ink)]">Cold leads</h2>
           <p className="mt-1 text-[13px] text-[var(--color-muted)]">
-            Showing {leads.length} lead{leads.length === 1 ? '' : 's'} · est. value ${Math.round(totalValue).toLocaleString()} ·
-            check the boxes for the leads you want drafts for, then click Generate.
+            Showing {leads.length} of {totalForFilter} {status === 'all' ? 'leads' : status} · est. value ${Math.round(totalValue).toLocaleString()}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {STATUS_FILTERS.map((f) => (
-            <Link
-              key={f.key}
-              href={f.key === 'all' ? '/' : `/?status=${f.key}`}
-              className={`filter-pill ${f.key === status ? 'filter-pill-active' : ''}`}
-            >
-              {f.label}
-            </Link>
-          ))}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            {STATUS_FILTERS.map((f) => (
+              <Link
+                key={f.key}
+                href={buildStatusHref(f.key)}
+                className={`filter-pill ${f.key === status ? 'filter-pill-active' : ''}`}
+              >
+                {f.label}
+              </Link>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5 border-l border-[var(--color-hairline-soft)] pl-3">
+            <span className="text-[11px] uppercase tracking-wider text-[var(--color-muted)]">Show</span>
+            {PAGE_SIZES.map((n) => (
+              <Link
+                key={n}
+                href={buildLimitHref(n)}
+                className={`filter-pill ${n === limit ? 'filter-pill-active' : ''}`}
+              >
+                {n}
+              </Link>
+            ))}
+          </div>
         </div>
       </header>
 
@@ -207,6 +298,16 @@ function LeadsSection({
         </div>
       ) : (
         <form action={generateDraftsForm}>
+          {/* Top submit bar - mirrors the bottom one so the CTA is always visible */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-hairline-soft)] bg-[var(--color-surface-soft)] px-6 py-3">
+            <p className="text-[12.5px] text-[var(--color-muted)]">
+              Tick the boxes below for the leads you want drafts for, then click Generate selected.
+            </p>
+            <button type="submit" className="btn-primary text-[13.5px] px-4 py-2">
+              Generate selected drafts
+            </button>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full text-[13.5px]">
               <thead className="bg-[var(--color-surface-soft)] text-left text-[11px] uppercase tracking-wider text-[var(--color-muted)]">
@@ -280,11 +381,11 @@ function LeadsSection({
             </table>
           </div>
           <footer className="flex flex-wrap items-center justify-between gap-4 border-t border-[var(--color-hairline-soft)] bg-[var(--color-surface-soft)] px-6 py-4">
-            <p className="text-[13px] text-[var(--color-muted)]">
-              Eligibility: less than 3 attempts and not opted out. Each generation costs ~$0.005 with gpt-4.1-mini.
+            <p className="text-[12.5px] text-[var(--color-muted)]">
+              Eligibility: less than 3 attempts and not opted out. Generation creates drafts only — no customer messages are sent.
             </p>
             <button type="submit" className="btn-primary">
-              Generate reactivation drafts
+              Generate selected drafts
             </button>
           </footer>
         </form>
@@ -306,6 +407,27 @@ function ErrorBanner({ message }: { message: string }) {
         Check that <code>NEXT_PUBLIC_SUPABASE_URL</code> and <code>SUPABASE_SERVICE_ROLE_KEY</code> are set, and that
         the schema in <code>supabase/schema.sql</code> has been applied.
       </p>
+    </div>
+  );
+}
+
+function Banner({
+  kind,
+  title,
+  body,
+}: {
+  kind: 'error' | 'success';
+  title: string;
+  body: string;
+}) {
+  const cls =
+    kind === 'error'
+      ? 'border-rose-200 bg-rose-50 text-rose-800'
+      : 'border-emerald-200 bg-emerald-50 text-emerald-800';
+  return (
+    <div className={`rounded-[14px] border ${cls} px-5 py-4`}>
+      <p className="text-[14px] font-semibold">{title}</p>
+      <p className="mt-1 text-[13px]">{body}</p>
     </div>
   );
 }
@@ -336,4 +458,14 @@ async function getKpis(supabase: ReturnType<typeof getServerClient>): Promise<Kp
     outboxSent: outbox.filter((m) => m.status === 'sent_simulated').length,
     hotReplies: (repliesRes.data ?? []).length,
   };
+}
+
+async function getTotalForFilter(
+  supabase: ReturnType<typeof getServerClient>,
+  status: 'all' | LeadStatus,
+): Promise<number> {
+  let q = supabase.from('closed_lost_leads').select('id', { count: 'exact', head: true });
+  if (status !== 'all') q = q.eq('status', status);
+  const { count } = await q;
+  return count ?? 0;
 }

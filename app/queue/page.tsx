@@ -9,7 +9,17 @@ interface DraftWithLead extends OutreachDraft {
   lead: ClosedLostLead;
 }
 
-export default async function QueuePage() {
+export default async function QueuePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ generated?: string; failed?: string; error?: string; error_sample?: string }>;
+}) {
+  const sp = await searchParams;
+  const generated = Number(sp.generated ?? -1);
+  const failed = Number(sp.failed ?? 0);
+  const errorMsg = sp.error;
+  const errorSample = sp.error_sample;
+
   const supabase = getServerClient();
   const { data, error } = await supabase
     .from('outreach_drafts')
@@ -28,16 +38,14 @@ export default async function QueuePage() {
   const drafts = (data ?? []) as DraftWithLead[];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <header className="space-y-2">
         <p className="section-eyebrow">Step 2 · Approval queue</p>
         <h1 className="text-[26px] font-semibold tracking-tight text-[var(--color-ink)]">
           Review drafts before anything is sent.
         </h1>
         <p className="max-w-2xl text-[14px] leading-relaxed text-[var(--color-body-text)]">
-          {drafts.length === 0
-            ? 'Nothing in the queue right now. Generate drafts from the leads dashboard to populate this view.'
-            : `${drafts.length} draft${drafts.length === 1 ? '' : 's'} waiting for approval. Approving queues SMS + email to the outbox and pings Telegram.`}
+          Approving queues SMS and email drafts to the outbox <span className="font-semibold text-[var(--color-ink)]">and</span> sends an internal Telegram notification to the team. <span className="font-semibold text-[var(--color-ink)]">No customer SMS or email is sent in this demo</span> — production wires the outbox to GHL/Twilio behind the <code className="rounded bg-[var(--color-surface-strong)] px-1 text-[12px]">GHL_SEND_ENABLED</code> flag.
         </p>
         <div>
           <Link href="/" className="text-[13px] font-medium text-rausch hover:underline">
@@ -46,7 +54,56 @@ export default async function QueuePage() {
         </div>
       </header>
 
-      {drafts.length === 0 && (
+      {/* Result banners after a generate run */}
+      {errorMsg && (
+        <ResultBanner
+          kind="error"
+          title="Generation failed"
+          body={
+            <>
+              Could not complete generation: <code className="font-mono text-[12px]">{decodeURIComponent(errorMsg)}</code>. Common causes: OpenAI API key invalid, Supabase service role key wrong, or model name not available. Check Vercel logs at the inspector URL.
+            </>
+          }
+        />
+      )}
+      {generated >= 0 && !errorMsg && generated > 0 && (
+        <ResultBanner
+          kind="success"
+          title={`Generated ${generated} draft${generated === 1 ? '' : 's'}.`}
+          body={
+            <>
+              Review and approve below. <span className="font-semibold">Telegram fires only after you approve a draft</span> — never on generation.
+              {failed > 0 && (
+                <>
+                  {' '}
+                  <span className="text-rose-700">{failed} draft{failed === 1 ? '' : 's'} failed</span>
+                  {errorSample ? <> ({decodeURIComponent(errorSample)})</> : null}.
+                </>
+              )}
+            </>
+          }
+        />
+      )}
+      {generated === 0 && !errorMsg && drafts.length === 0 && (
+        <ResultBanner
+          kind="error"
+          title="No drafts were created"
+          body={
+            <>
+              {failed > 0 ? (
+                <>
+                  All {failed} attempted leads failed{errorSample ? ` (${decodeURIComponent(errorSample)})` : ''}. Check OpenAI API key,{' '}
+                  <code className="font-mono text-[12px]">OPENAI_MODEL</code>, and Supabase env vars on Vercel.
+                </>
+              ) : (
+                <>No leads were eligible. Pick eligible leads (attempts &lt; 3, not opted out) and try again.</>
+              )}
+            </>
+          }
+        />
+      )}
+
+      {drafts.length === 0 && generated < 0 && (
         <div className="empty-state">
           <h3>Approval queue is clear</h3>
           <p>
@@ -61,6 +118,27 @@ export default async function QueuePage() {
           <DraftCard key={d.id} draft={d} />
         ))}
       </div>
+    </div>
+  );
+}
+
+function ResultBanner({
+  kind,
+  title,
+  body,
+}: {
+  kind: 'success' | 'error';
+  title: string;
+  body: React.ReactNode;
+}) {
+  const cls =
+    kind === 'success'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+      : 'border-rose-200 bg-rose-50 text-rose-900';
+  return (
+    <div className={`rounded-[14px] border ${cls} px-5 py-4`}>
+      <p className="text-[14.5px] font-semibold">{title}</p>
+      <p className="mt-1 text-[13.5px] leading-relaxed">{body}</p>
     </div>
   );
 }
@@ -129,7 +207,7 @@ function DraftCard({ draft }: { draft: DraftWithLead }) {
         </form>
         <form action={approveDraftForm}>
           <input type="hidden" name="draftId" value={draft.id} />
-          <button type="submit" className="btn-primary">Approve & queue to outbox</button>
+          <button type="submit" className="btn-primary">Approve & queue outreach + notify team</button>
         </form>
       </footer>
     </article>

@@ -118,10 +118,53 @@ export async function generateDraftsForLeads(leadIds: string[]): Promise<{
   return { generated, failed, errors };
 }
 
+async function generateAndRedirect(ids: string[]) {
+  let result: { generated: number; failed: number; errors: string[] } | null = null;
+  let topLevelError: string | null = null;
+  try {
+    result = await generateDraftsForLeads(ids);
+  } catch (err) {
+    topLevelError = err instanceof Error ? err.message : String(err);
+  }
+  if (topLevelError) {
+    redirect(`/queue?error=${encodeURIComponent(topLevelError.slice(0, 200))}`);
+  }
+  const r = result!;
+  const params = new URLSearchParams({
+    generated: String(r.generated),
+    failed: String(r.failed),
+  });
+  if (r.failed > 0 && r.errors.length) {
+    params.set('error_sample', r.errors[0].slice(0, 200));
+  }
+  redirect(`/queue?${params.toString()}`);
+}
+
 export async function generateDraftsForm(formData: FormData) {
   const ids = formData.getAll('leadId').map((v) => String(v));
-  await generateDraftsForLeads(ids);
-  redirect('/queue');
+  if (!ids.length) {
+    redirect('/?error=no_leads');
+  }
+  await generateAndRedirect(ids);
+}
+
+export async function generateTopThreeForm() {
+  const supabase = getServerClient();
+  const { data, error } = await supabase
+    .from('closed_lost_leads')
+    .select('id')
+    .eq('status', 'new')
+    .lt('attempt_count', 3)
+    .order('est_project_value', { ascending: false })
+    .limit(3);
+  if (error) {
+    redirect(`/queue?error=${encodeURIComponent(error.message.slice(0, 200))}`);
+  }
+  const ids = (data ?? []).map((r: { id: string }) => r.id);
+  if (!ids.length) {
+    redirect('/?error=no_eligible');
+  }
+  await generateAndRedirect(ids);
 }
 
 export async function approveDraft(draftId: string): Promise<void> {
